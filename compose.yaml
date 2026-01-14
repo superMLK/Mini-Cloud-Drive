@@ -1,0 +1,49 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: clouddrive-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-verysecret}
+      MYSQL_DATABASE: ${DB_NAME:-clouddrive_db}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./src/main/resources/db/migration:/docker-entrypoint-initdb.d
+    networks:
+      - clouddrive-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: clouddrive-backend
+    labels:
+      org.springframework.boot.ignore: true
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${DB_NAME:-clouddrive_db}?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: ${DB_ROOT_PASSWORD:-verysecret}
+      JWT_SECRET: ${JWT_SECRET:-your-256-bit-secret-key-change-this-in-production}
+    ports:
+      - "8080:8080"
+    volumes:
+      - file-storage:/app/uploads
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - clouddrive-network
+
+volumes:
+  mysql-data:
+  file-storage:
+
+networks:
+  clouddrive-network:
+    driver: bridge
