@@ -7,6 +7,7 @@ RUN chmod +x mvnw
 RUN ./mvnw dependency:go-offline
 COPY src ./src
 RUN ./mvnw clean package -DskipTests
+COPY src/main/resources/keystore.p12 src/main/resources/keystore.p12
 
 # Runtime stage
 FROM amazoncorretto:17-alpine

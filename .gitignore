@@ -53,3 +53,6 @@ Thumbs.db
 *.class
 *.jar
 *.war
+
+### 自簽憑證 ###
+src/main/resources/keystore.p12

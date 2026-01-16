@@ -2,6 +2,9 @@ spring:
   application:
     name: Mini-Cloud-Drive
 
+  config:
+    import: optional:file:.env[.properties]
+
   datasource:
     url: jdbc:mysql://localhost:3306/${DB_NAME:clouddrive_db}?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
     username: ${DB_USER:root}
@@ -35,7 +38,7 @@ spring:
 
 jwt:
   secret: ${JWT_SECRET}
-  expiration: 86400000
+  expiration: 3600000
 
 file:
   upload-dir: ./uploads
@@ -47,3 +50,12 @@ springdoc:
   swagger-ui:
     path: /swagger-ui.html
     enabled: true
+
+server:
+  port: 8443
+  ssl:
+    enabled: true
+    key-store: ${KEY_STORE}
+    key-store-password: ${KEY_STORE_PASSWORD}
+    key-store-type: PKCS12
+    key-alias: my-ssl
