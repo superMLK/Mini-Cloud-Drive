@@ -29,7 +29,7 @@ public class User {
     private String passwordHash;
 
     /** 使用者名稱 */
-    @Column(nullable = false)
+    @Column(unique = true, nullable = false)
     private String username;
 
     /** 儲存配額，預設為5GB */
