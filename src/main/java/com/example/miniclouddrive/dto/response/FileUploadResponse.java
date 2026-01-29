@@ -1,5 +1,6 @@
 package com.example.miniclouddrive.dto.response;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -14,16 +15,18 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@Schema(description = "檔案上傳成功回應")
 public class FileUploadResponse {
-    /** 檔案 ID */
+
+    @Schema(description = "檔案 ID", example = "1")
     private Long fileId;
 
-    /** 檔案名稱 */
+    @Schema(description = "檔案名稱", example = "document.pdf")
     private String fileName;
 
-    /** 檔案大小（bytes） */
+    @Schema(description = "檔案大小（bytes）", example = "1048576")
     private Long size;
 
-    /** 上傳時間 */
+    @Schema(description = "上傳時間", example = "2024-01-15T10:30:00")
     private LocalDateTime uploadTime;
 }

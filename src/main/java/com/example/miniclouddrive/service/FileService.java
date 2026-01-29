@@ -1,5 +1,6 @@
 package com.example.miniclouddrive.service;
 
+import com.example.miniclouddrive.dto.response.CreateFolderResponse;
 import com.example.miniclouddrive.dto.response.FileUploadResponse;
 import com.example.miniclouddrive.entity.FileEntity;
 import com.example.miniclouddrive.entity.User;
@@ -26,6 +27,7 @@ import java.util.Optional;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+@Transactional(readOnly = true)
 public class FileService {
 
     private final FileRepository fileRepository;
@@ -34,37 +36,165 @@ public class FileService {
 
     /**
      * 上傳檔案
-     * 
-     * @param file            上傳的檔案
-     * @param folderId        目標資料夾 ID（null 表示根目錄）
-     * @param duplicateAction 重複檔案處理方式（null=拒絕, 0=覆蓋, 1=加後綴）
-     * @param userId          當前使用者 ID
-     * @return 上傳結果
      */
     @Transactional
     public FileUploadResponse uploadFile(MultipartFile file, Long folderId, Integer duplicateAction, Long userId) {
-        // 1. 取得使用者資訊
+        // ... (保持原樣)
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalStateException("使用者不存在"));
 
-        // 2. 檢查儲存配額
         checkStorageQuota(user, file.getSize());
 
-        // 3. 驗證並取得目標資料夾
         FileEntity parentFolder = validateAndGetFolder(folderId, userId);
 
-        // 4. 檢查檔案是否重複
         String originalFilename = file.getOriginalFilename();
         Optional<FileEntity> existingFile = fileRepository.findByNameAndParentAndOwnerIdAndDeletedAtIsNull(
                 originalFilename, parentFolder, userId);
 
         if (existingFile.isPresent()) {
-            // 處理重複檔案
             return handleDuplicateFile(file, existingFile.get(), parentFolder, duplicateAction, userId);
         }
 
-        // 5. 儲存檔案並建立記錄
         return saveNewFile(file, parentFolder, userId);
+    }
+
+    // ... (其他的依舊) ...
+
+    /**
+     * 重新命名資料夾
+     * 
+     * @param folderId 資料夾 ID
+     * @param newName  新資料夾名稱
+     * @param userId   當前使用者 ID
+     */
+    @Transactional
+    public void renameFolder(Long folderId, String newName, Long userId) {
+        // 1. 查詢資料夾並驗證權限
+        FileEntity folder = fileRepository
+                .findByIdAndOwnerIdAndTypeAndDeletedAtIsNull(folderId, userId, FileType.FOLDER)
+                .orElseThrow(() -> new InvalidFolderException(folderId));
+
+        String oldName = folder.getName();
+
+        // 2. 如果名稱沒有變更，直接返回
+        if (oldName.equals(newName)) {
+            return;
+        }
+
+        // 3. 檢查同一父目錄下是否已有同名資料夾
+        Optional<FileEntity> existingFolder = fileRepository.findByNameAndParentAndOwnerIdAndDeletedAtIsNull(
+                newName, folder.getParent(), userId);
+
+        if (existingFolder.isPresent()) {
+            throw new FileAlreadyExistsException(
+                    existingFolder.get().getId(),
+                    existingFolder.get().getName(),
+                    existingFolder.get().getCreatedAt());
+        }
+
+        // 4. 更新資料夾名稱
+        folder.setName(newName);
+        fileRepository.save(folder);
+
+        log.info("資料夾重新命名成功: userId={}, folderId={}, oldName={}, newName={}",
+                userId, folder.getId(), oldName, newName);
+    }
+
+    /**
+     * 建立資料夾
+     * 
+     * @param name     資料夾名稱
+     * @param parentId 父資料夾 ID（null 表示根目錄）
+     * @param userId   當前使用者 ID
+     * @return 建立結果
+     */
+    @Transactional
+    public CreateFolderResponse createFolder(String name, Long parentId, Long userId) {
+        // 1. 驗證父資料夾
+        FileEntity parentFolder = validateAndGetFolder(parentId, userId);
+
+        // 2. 檢查同名資料夾是否已存在
+        Optional<FileEntity> existingFolder = fileRepository.findByNameAndParentAndOwnerIdAndDeletedAtIsNull(
+                name, parentFolder, userId);
+
+        if (existingFolder.isPresent()) {
+            throw new FileAlreadyExistsException(
+                    existingFolder.get().getId(),
+                    existingFolder.get().getName(),
+                    existingFolder.get().getCreatedAt());
+        }
+
+        // 3. 建立資料夾記錄
+        FileEntity folder = FileEntity.builder()
+                .name(name)
+                .type(FileType.FOLDER)
+                .size(0L)
+                .parent(parentFolder)
+                .ownerId(userId)
+                .build();
+
+        FileEntity savedFolder = fileRepository.save(folder);
+        log.info("資料夾建立成功: userId={}, folderId={}, folderName={}", userId, savedFolder.getId(), savedFolder.getName());
+
+        return CreateFolderResponse.builder()
+                .folderId(savedFolder.getId())
+                .name(savedFolder.getName())
+                .parentId(parentId)
+                .build();
+    }
+
+    /**
+     * 刪除資料夾（軟刪除）
+     * 遞迴刪除資料夾及其所有子項目
+     * 
+     * @param folderId 資料夾 ID
+     * @param userId   當前使用者 ID
+     */
+    @Transactional
+    public void deleteFolder(Long folderId, Long userId) {
+        // 1. 查詢資料夾並驗證權限
+        FileEntity folder = fileRepository
+                .findByIdAndOwnerIdAndTypeAndDeletedAtIsNull(folderId, userId, FileType.FOLDER)
+                .orElseThrow(() -> new InvalidFolderException(folderId));
+
+        // 2. 遞迴刪除所有子項目
+        deleteRecursively(folder);
+
+        log.info("資料夾刪除成功: userId={}, folderId={}, folderName={}", userId, folder.getId(), folder.getName());
+    }
+
+    /**
+     * 重新命名資料夾
+     * 
+     * @param folderId 資料夾 ID
+     * @param newName  新資料夾名稱
+     * @param userId   當前使用者 ID
+     */
+
+    /**
+     * 遞迴軟刪除資料夾及其子項目
+     */
+    private void deleteRecursively(FileEntity entity) {
+        // 如果是資料夾，先刪除所有子項目
+        if (entity.getType() == FileType.FOLDER) {
+            java.util.List<FileEntity> children = fileRepository.findByParentAndDeletedAtIsNull(entity);
+            for (FileEntity child : children) {
+                deleteRecursively(child);
+            }
+        }
+
+        // 軟刪除當前項目
+        entity.setDeletedAt(java.time.LocalDateTime.now());
+        fileRepository.save(entity);
+
+        // 如果是檔案，也可以選擇刪除實體檔案（這裡保留檔案以便未來恢復）
+        // if (entity.getType() == FileType.FILE && entity.getFilePath() != null) {
+        // try {
+        // fileStorageService.delete(entity.getFilePath());
+        // } catch (IOException e) {
+        // log.warn("刪除實體檔案失敗: {}", entity.getFilePath(), e);
+        // }
+        // }
     }
 
     /**
