@@ -7,10 +7,23 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import java.util.List;
 import java.util.Optional;
 
 public interface FileRepository extends JpaRepository<@NonNull FileEntity, @NonNull Long> {
+
+        /**
+         * 查詢檔案列表 (分頁)
+         */
+        @Query("SELECT f FROM FileEntity f WHERE " +
+                        "(:parent IS NULL AND f.parent IS NULL OR f.parent = :parent) " +
+                        "AND f.ownerId = :ownerId " +
+                        "AND f.deletedAt IS NULL")
+        Page<FileEntity> findFiles(@Param("parent") FileEntity parent,
+                        @Param("ownerId") Long ownerId,
+                        Pageable pageable);
 
         Optional<FileEntity> findByName(String fileName);
 

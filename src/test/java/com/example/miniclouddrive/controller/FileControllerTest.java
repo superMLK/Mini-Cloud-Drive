@@ -23,11 +23,16 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import com.example.miniclouddrive.dto.response.FileResponse;
+import java.util.List;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import java.time.LocalDateTime;
 
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /**
@@ -259,6 +264,45 @@ class FileControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                         .andExpect(status().isConflict());
+            }
+        }
+    }
+
+    @Nested
+    @DisplayName("GET /api/files/list 測試")
+    class GetFileListTests {
+
+        @Test
+        @DisplayName("成功查詢檔案列表")
+        void shouldReturnFileListSuccessfully() throws Exception {
+            // Given
+            Long folderId = 1L;
+            int page = 0;
+            int size = 10;
+
+            FileResponse mockFile = FileResponse.builder()
+                    .fileId(101L)
+                    .fileName("test.txt")
+                    .size(1024L)
+                    .uploadTime(LocalDateTime.now())
+                    .build();
+
+            Page<FileResponse> mockPage = new PageImpl<>(List.of(mockFile), PageRequest.of(page, size), 1);
+
+            try (MockedStatic<SecurityUtils> securityMock = mockStatic(SecurityUtils.class)) {
+                securityMock.when(SecurityUtils::getCurrentUserId).thenReturn(USER_ID);
+                when(fileService.getFileList(USER_ID, folderId, page, size)).thenReturn(mockPage);
+
+                // When & Then
+                mockMvc.perform(get("/api/files/list")
+                        .param("folderId", String.valueOf(folderId))
+                        .param("page", String.valueOf(page))
+                        .param("size", String.valueOf(size)))
+                        .andExpect(status().isOk())
+                        .andExpect(jsonPath("$.rtnCode").value("0000"))
+                        .andExpect(jsonPath("$.data.content[0].fileName").value("test.txt"));
+
+                verify(fileService).getFileList(USER_ID, folderId, page, size);
             }
         }
     }

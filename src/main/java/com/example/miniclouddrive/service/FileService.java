@@ -1,6 +1,7 @@
 package com.example.miniclouddrive.service;
 
 import com.example.miniclouddrive.dto.response.CreateFolderResponse;
+import com.example.miniclouddrive.dto.response.FileResponse;
 import com.example.miniclouddrive.dto.response.FileUploadResponse;
 import com.example.miniclouddrive.entity.FileEntity;
 import com.example.miniclouddrive.entity.User;
@@ -13,6 +14,7 @@ import com.example.miniclouddrive.repository.FileRepository;
 import com.example.miniclouddrive.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -359,6 +361,43 @@ public class FileService {
      */
     private FileUploadResponse buildResponse(FileEntity fileEntity) {
         return FileUploadResponse.builder()
+                .fileId(fileEntity.getId())
+                .fileName(fileEntity.getName())
+                .size(fileEntity.getSize())
+                .uploadTime(fileEntity.getCreatedAt())
+                .build();
+    }
+
+    /**
+     * 查詢檔案列表
+     * 
+     * @param userId   使用者 ID
+     * @param folderId 資料夾 ID
+     * @param page     分頁頁碼
+     * @param size     每頁筆數
+     * @return 檔案列表分頁
+     */
+    public Page<FileResponse> getFileList(
+            Long userId, Long folderId, int page, int size) {
+        FileEntity parentFolder = validateAndGetFolder(folderId, userId);
+
+        Pageable pageable = PageRequest.of(page, size,
+                Sort.by("type").descending()
+                        .and(Sort.by("createdAt").descending()));
+
+        Page<FileEntity> filePage = fileRepository.findFiles(parentFolder, userId,
+                pageable);
+
+        java.util.List<FileResponse> responseList = filePage.getContent()
+                .stream()
+                .map(this::buildFileResponse)
+                .collect(java.util.stream.Collectors.toList());
+
+        return new PageImpl<>(responseList, pageable, filePage.getTotalElements());
+    }
+
+    private FileResponse buildFileResponse(FileEntity fileEntity) {
+        return FileResponse.builder()
                 .fileId(fileEntity.getId())
                 .fileName(fileEntity.getName())
                 .size(fileEntity.getSize())

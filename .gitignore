@@ -34,8 +34,6 @@ build/
 
 ### VS Code ###
 .vscode/
-.agent/
-.gemini/
 
 ### 環境變數（敏感資訊） ###
 .env
@@ -55,7 +53,3 @@ Thumbs.db
 *.class
 *.jar
 *.war
-
-### 自簽憑證 ###
-src/main/resources/keystore.p12
-src/main/resources/my-ssl.crt
